@@ -1,0 +1,30 @@
+[
+    {
+        "ParameterKey": "VPCCIDR",
+        "ParameterValue": "10.2.0.0/16"
+    },
+    {
+        "ParameterKey": "VPCCIDRPubSubNet1",
+        "ParameterValue": "10.2.0.0/24"
+    },
+    {
+        "ParameterKey": "VPCCIDRPubSubNet2",
+        "ParameterValue": "10.2.2.0/24"
+    },
+    {
+        "ParameterKey": "VPCCIDRPrivateSubNet1",
+        "ParameterValue": "10.2.1.0/24"
+    },
+    {
+        "ParameterKey": "VPCCIDRPrivateSubNet2",
+        "ParameterValue": "10.2.3.0/24"
+    },
+    {
+        "ParameterKey": "ProjectInstanceType",
+        "ParameterValue": "t2.micro"
+    },
+    {
+		"ParameterKey": "ProjectName",
+		"ParameterValue": "Project2"
+	}
+]

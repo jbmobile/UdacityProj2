@@ -1,0 +1,103 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: This is completely for test purposes
+
+#The stack name is just some junk - junkStack
+Resources:
+  TheS3ReaderRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: This is the S3 Read-only role to allow EC2 instances to read from S3 buckets.
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action: 
+              - sts:AssumeRole
+      #Path: '/'
+      Tags:
+        - Key: Name
+          Value: JunkgarbageCrapRole
+
+  TheEC2JunkInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: JunkInstProfile
+      Path: /
+      Roles:
+        - !Ref TheS3ReaderRole
+
+  # Security Group
+  WebAccessSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+        GroupDescription: Allow http to our test host
+        Tags:
+          - Key: Name
+            Value: DummySGToTestThings 
+        VpcId: vpc-9728bfea
+        SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 69.138.170.109/32 
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        SecurityGroupEgress:
+        - IpProtocol: -1
+          FromPort: -1
+          ToPort: -1
+          CidrIp: 0.0.0.0/0
+
+  JunkLaunchConfig:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      ImageId: ami-0aeeebd8d2ab47354
+      InstanceType: t2.micro
+      IamInstanceProfile: !Ref TheEC2JunkInstanceProfile
+      #AvailabilityZone: us-east-1
+      #SubnetId: subnet-343a7a15
+      KeyName: DummyTestKey
+      InstanceMonitoring: false
+      SecurityGroups:
+        - Ref: "WebAccessSecurityGroup"
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/sh
+          sudo yum update -y
+          sudo yum install -y httpd
+          sudo systemctl start httpd
+          sudo systemctl enable httpd
+          sudo groupadd www
+          sudo usermod -a -G www ec2-user
+          sudo chgrp -R www /var/www
+          sudo chmod 2775 /var/www
+          find /var/www -type d -exec sudo chmod 2775 {} +
+          find /var/www -type f -exec sudo chmod 0664 {} +
+          echo "<h1>OH YEAH - GOT IT!</h1>" > /var/www/html/foo.html  
+      BlockDeviceMappings:
+        - DeviceName: "/dev/sdk"
+          Ebs:
+            VolumeSize: '10'
+
+  JunkAutoScaleGrp:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: DummyAutoScaleGroup
+      LaunchConfigurationName:
+        Ref: JunkLaunchConfig
+      MinSize: '3'
+      MaxSize: '5'
+      VPCZoneIdentifier:
+        - subnet-343a7a15
+        - subnet-b6e4eefb
+        - subnet-cc38b6fd
+        - subnet-f1ffc3ff
+      #TargetGroupARNs:
+      #- Ref: WebAppTargetGroup

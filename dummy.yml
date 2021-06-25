@@ -1,0 +1,95 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: This is completely for test purposes
+
+#The stack name is just some junk - junkStack
+Resources:
+  TheS3ReaderRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: This is the S3 Read-only role to attach to the S3 buckets for the EC2 instances to read
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action: 
+              - sts:AssumeRole
+      #Path: '/'
+      Tags:
+        - Key: Name
+          Value: JunkgarbageCrapRole
+
+  TheEC2JunkInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: JunkInstProfile
+      Path: /
+      Roles:
+        - !Ref TheS3ReaderRole
+
+  # Security Group
+  WebAccessSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+        GroupDescription: Allow http to our test host
+        Tags:
+          - Key: Name
+            Value: DummySGToTestThings 
+        VpcId: vpc-9728bfea
+        SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 69.138.170.109/32 
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        SecurityGroupEgress:
+        - IpProtocol: -1
+          FromPort: -1
+          ToPort: -1
+          CidrIp: 0.0.0.0/0
+
+  TheInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0aeeebd8d2ab47354
+      InstanceType: t2.micro
+      #AvailabilityZone: us-east-1
+      #SubnetId: subnet-343a7a15
+      KeyName: DummyTestKey
+      IamInstanceProfile: !Ref TheEC2JunkInstanceProfile
+      #SecurityGroupIds: [sg-0272da399109058e0]
+      InstanceInitiatedShutdownBehavior: terminate
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: true
+          DeleteOnTermination: true
+          Description: This is the network interface for the dummy test instance
+          DeviceIndex: 0
+          SubnetId: subnet-343a7a15
+          #PrivateIpAddress: 172.31.80.5
+          GroupSet:
+            - Ref: "WebAccessSecurityGroup"
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/sh
+          sudo yum update -y
+          sudo yum install -y httpd
+          sudo systemctl start httpd
+          sudo systemctl enable httpd
+          sudo groupadd www
+          sudo usermod -a -G www ec2-user
+          sudo chgrp -R www /var/www
+          sudo chmod 2775 /var/www
+          find /var/www -type d -exec sudo chmod 2775 {} +
+          find /var/www -type f -exec sudo chmod 0664 {} +
+          echo "<h1>FUCK YEAH - GOT IT!</h1>" > /var/www/html/foo.html
+      Tags:
+        #Using the actual "Name" specifically as the key - will give you the "Name" value in the console
+        - Key: Name
+          Value: DummyEC2

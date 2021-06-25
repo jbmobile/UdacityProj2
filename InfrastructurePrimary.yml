@@ -1,0 +1,135 @@
+#This template is used to create the Proj2Stack CloudFormation stack
+#For Jeff Behrbaum's Project 2 Udacity DevOps Nano Degree
+
+
+AWSTemplateFormatVersion: "2010-09-09"
+Description:
+  "Jeff Behrbaum - Udacity DevOps Nano-Degree Prject 2"
+
+#Used to describe the variable "types" contained in the 
+#associated parameters JSON file.
+Parameters:
+  VPCCIDR:
+    Type: String
+  VPCCIDRPubSubNet1:
+    Type: String
+  VPCCIDRPubSubNet2:
+    Type: String
+  VPCCIDRPrivateSubNet1:
+    Type: String
+  VPCCIDRPrivateSubNet2:
+    Type: String
+  ProjectName:
+    Description: An environment name for project 2
+    Type: String
+
+#  VPCNAME:
+#    Type: AWS::EC2::VPC::Id
+
+Resources:
+  Proj2VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      # To have all subnets be 10.2.N+1.0
+      # where even values for (N%2) == 0 are public subnets
+      # and odd values for (N%2) == 1 are private subnets
+      CidrBlock: !Ref VPCCIDR
+      EnableDnsHostnames: true
+      Tags:
+        #Using the actual "Name" specifically as the key - will give you the "Name" value in the console
+        - Key: Name
+          Value: Proj2StackVPC
+  ProjectInternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName} - Internet Gateway
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref ProjectInternetGateway
+      VpcId: !Ref Proj2VPC
+  PublicSubNet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Proj2VPC
+      CidrBlock: !Ref VPCCIDRPubSubNet1
+      MapPublicIpOnLaunch: true
+      AvailabilityZone: !Select [ 0, !GetAZs ]       
+      Tags:
+      - Key: Name
+        Value: !Sub ${AWS::StackName}-PublicSubNet-1
+  PublicSubNet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Proj2VPC
+      CidrBlock: !Ref VPCCIDRPubSubNet2
+      MapPublicIpOnLaunch: true
+      AvailabilityZone: !Select [ 1, !GetAZs ]       
+      Tags:
+      - Key: Name
+        Value: !Sub ${AWS::StackName}-PublicSubNet-2
+  PrivateSubNet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Proj2VPC
+      CidrBlock: !Ref VPCCIDRPrivateSubNet1
+      MapPublicIpOnLaunch: false
+      AvailabilityZone: !Select [ 0, !GetAZs ]       
+      Tags:
+      - Key: Name
+        Value: !Sub ${AWS::StackName}-PrivateSubNet-1
+  PrivateSubNet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Proj2VPC
+      CidrBlock: !Ref VPCCIDRPrivateSubNet2
+      MapPublicIpOnLaunch: false
+      AvailabilityZone: !Select [ 1, !GetAZs ]       
+      Tags:
+      - Key: Name
+        Value: !Sub ${AWS::StackName}-PrivateSubNet-2
+  
+  #This is the request to get a Public IP so it can be 
+  #attached to the NGW for Public Subnet 1
+  NatGatewayEIPPub1:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties: 
+        Domain: vpc
+
+  #This is the request to get a Public IP so it can be 
+  #attached to the NGW for Public Subnet 2
+  NatGatewayEIPPub2:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+        Domain: vpc
+  
+  NATGWPubSub1: 
+    Type: AWS::EC2::NatGateway
+    Properties:
+        # This just pulls the IP Address created in the NatGateway calls above
+        # so we can have that IP associated with this NAT Gateway.
+        AllocationId: !GetAtt NatGatewayEIPPub1.AllocationId
+        SubnetId: !Ref PublicSubNet1
+
+  NATGWPubSub2: 
+    Type: AWS::EC2::NatGateway
+    Properties:
+        # This just pulls the IP Address created in the NatGateway calls above
+        # so we can have that IP associated with this NAT Gateway.
+        AllocationId: !GetAtt NatGatewayEIPPub2.AllocationId
+        SubnetId: !Ref PublicSubNet2
+
+  #S3CodeBucket:
+  #  Type: AWS::S3::Bucket
+  #  Description:
+
+  Outputs:
+    VPC:
+      Description: This is the configured Udaciyt Project VPC
+      Value: !Ref Proj2VPC
+      Export:
+        Name: UdacityProj2VPC

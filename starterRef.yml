@@ -1,0 +1,105 @@
+Parameters:
+# whatever you consider a changing value, put it as a parameter instead of hard-coding it into your script
+
+#Do NOT turn this file in as part of your project
+Resources:
+  #instace profile contains the IAM Role name(s) that we want to associate to our auto scaling EC2 Servers
+  ProfileWithRolesForOurApp:
+    Type: AWS::IAM::InstanceProfile
+    Properties: 
+      Roles:
+        - UdacityS3ReadOnlyEC2
+  
+          #!/bin/bash
+          apt-get update -y
+          apt-get install unzip awscli -y
+          apt-get install apache2 -y
+          systemctl start apache2.service
+          cd /var/www/html
+          aws s3 cp s3://udacity-demo-1/udacity.zip .
+          unzip -o udacity.zip
+  Outputs: 
+  #Bonus points for useful outputs!
+
+
+######## Everything below is working just fine ###################
+AWSTemplateFormatVersion: "2010-09-09"
+Description: This is completely for test purposes
+
+#The stack name is just some junk - junkStack
+Resources:
+  TheInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0aeeebd8d2ab47354
+      InstanceType: t2.micro
+      #AvailabilityZone: us-east-1
+      #SubnetId: subnet-343a7a15
+      KeyName: DummyTestKey
+      #SecurityGroupIds: [sg-0272da399109058e0]
+      InstanceInitiatedShutdownBehavior: terminate
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: true
+          DeleteOnTermination: true
+          Description: This is the network interface for the dummy test instance
+          DeviceIndex: 0
+          SubnetId: subnet-343a7a15
+          #PrivateIpAddress: 172.31.80.5
+          GroupSet:
+            - sg-04c4489f8d364d117
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/sh
+          sudo yum update -y
+          sudo yum install -y httpd
+          sudo systemctl start httpd
+          sudo systemctl enable httpd
+          sudo groupadd www
+          sudo usermod -a -G www ec2-user
+          sudo chgrp -R www /var/www
+          sudo chmod 2775 /var/www
+          find /var/www -type d -exec sudo chmod 2775 {} +
+          find /var/www -type f -exec sudo chmod 0664 {} +
+          echo "<h1>FUCK YEAH - GOT IT!</h1>" > /var/www/html/foo.html
+      Tags:
+        #Using the actual "Name" specifically as the key - will give you the "Name" value in the console
+        - Key: Name
+          Value: DummyEC2
+
+
+  TheS3ReaderRole:
+    Type: AWS::IAM::ROLE
+    Properties:
+      Description: This is the S3 Read-only role to attach to the S3 buckets for the EC2 instances to read
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Pincipal:
+              - ec2.amazonaws.com
+            Action:
+              - s3:Get*
+              - s3:List*
+      Path: '/'
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  ################
+  
