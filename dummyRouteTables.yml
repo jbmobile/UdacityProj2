@@ -1,10 +1,9 @@
 #This template is used to create the Proj2Stack CloudFormation stack
 #For Jeff Behrbaum's Project 2 Udacity DevOps Nano Degree
 
-
 AWSTemplateFormatVersion: "2010-09-09"
 Description:
-  "Jeff Behrbaum - Udacity DevOps Nano-Degree Prject 2"
+  "Jeff Behrbaum - Udacity DevOps Nano-Degree Project 2"
 
 #Used to describe the variable "types" contained in the 
 #associated parameters JSON file.
@@ -18,6 +17,8 @@ Parameters:
   VPCCIDRPrivateSubNet1:
     Type: String
   VPCCIDRPrivateSubNet2:
+    Type: String
+  ProjectInstanceType:
     Type: String
   ProjectName:
     Description: An environment name for project 2
@@ -39,17 +40,20 @@ Resources:
         #Using the actual "Name" specifically as the key - will give you the "Name" value in the console
         - Key: Name
           Value: Proj2StackVPC
+  
   ProjectInternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName} - Internet Gateway
+  
   InternetGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
       InternetGatewayId: !Ref ProjectInternetGateway
       VpcId: !Ref Proj2VPC
+
   PublicSubNet1:
     Type: AWS::EC2::Subnet
     Properties:
@@ -60,6 +64,7 @@ Resources:
       Tags:
       - Key: Name
         Value: !Sub ${AWS::StackName}-PublicSubNet-1
+
   PublicSubNet2:
     Type: AWS::EC2::Subnet
     Properties:
@@ -70,6 +75,7 @@ Resources:
       Tags:
       - Key: Name
         Value: !Sub ${AWS::StackName}-PublicSubNet-2
+
   PrivateSubNet1:
     Type: AWS::EC2::Subnet
     Properties:
@@ -80,6 +86,7 @@ Resources:
       Tags:
       - Key: Name
         Value: !Sub ${AWS::StackName}-PrivateSubNet-1
+
   PrivateSubNet2:
     Type: AWS::EC2::Subnet
     Properties:
@@ -97,7 +104,10 @@ Resources:
     Type: AWS::EC2::EIP
     DependsOn: InternetGatewayAttachment
     Properties: 
-        Domain: vpc
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName} - EIP 1
 
   #This is the request to get a Public IP so it can be 
   #attached to the NGW for Public Subnet 2
@@ -105,27 +115,104 @@ Resources:
     Type: AWS::EC2::EIP
     DependsOn: InternetGatewayAttachment
     Properties:
-        Domain: vpc
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName} - EIP 2
   
   NATGWPubSub1: 
     Type: AWS::EC2::NatGateway
     Properties:
-        # This just pulls the IP Address created in the NatGateway calls above
-        # so we can have that IP associated with this NAT Gateway.
-        AllocationId: !GetAtt NatGatewayEIPPub1.AllocationId
-        SubnetId: !Ref PublicSubNet1
+      # This just pulls the IP Address created in the NatGateway calls above
+      # so we can have that IP associated with this NAT Gateway.
+      AllocationId: !GetAtt NatGatewayEIPPub1.AllocationId
+      SubnetId: !Ref PublicSubNet1
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName} - NATGW 1
 
   NATGWPubSub2: 
     Type: AWS::EC2::NatGateway
     Properties:
-        # This just pulls the IP Address created in the NatGateway calls above
-        # so we can have that IP associated with this NAT Gateway.
-        AllocationId: !GetAtt NatGatewayEIPPub2.AllocationId
-        SubnetId: !Ref PublicSubNet2
+      # This just pulls the IP Address created in the NatGateway calls above
+      # so we can have that IP associated with this NAT Gateway.
+      AllocationId: !GetAtt NatGatewayEIPPub2.AllocationId
+      SubnetId: !Ref PublicSubNet2
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName} - NATGW 2
 
-  Outputs:
-    VPC:
-      Description: This is the configured Udaciyt Project VPC
-      Value: !Ref Proj2VPC
-      Export:
-        Name: UdacityProj2VPC
+  #Below we are defining our Routint Tables
+
+  #The public routing tables, routes, and associations follow
+  PublicRouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Proj2VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName} Public Route
+
+  PublicRouteRule1:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable1
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref ProjectInternetGateway
+
+  PublicRoute1Association:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable1
+      SubnetId: !Ref PublicSubNet1
+
+  #The private routing tables and routes follow
+  PrivateRouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Proj2VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName} Private Route 1
+
+  PrivateRoute1:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGWPubSub1
+
+  PrivateRoute1Association:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      SubnetId: !Ref PrivateSubNet1
+
+  PrivateRouteTable2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Proj2VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName} Private Route 2
+
+  PrivateRoute2:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGWPubSub2
+
+  PrivateRoute2Association:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      SubnetId: !Ref PrivateSubNet2
+
+Outputs:
+  VPCInfo:
+    Description: This is the configured Udaciyt Project VPC
+    Value: !Ref Proj2VPC
+    Export:
+      Name: UdacityProj2VPC
