@@ -1,0 +1,431 @@
+#This template is used to create the Proj2Stack CloudFormation stack
+#For Jeff Behrbaum's Project 2 Udacity DevOps Nano Degree
+
+AWSTemplateFormatVersion: "2010-09-09"
+Description:
+  "Jeff Behrbaum - Udacity DevOps Nano-Degree Prject 2"
+
+#Used to describe the variable "types" contained in the 
+#associated parameters JSON file.
+Parameters:
+  VPCCIDR:
+    Type: String
+  VPCCIDRPubSubNet1:
+    Type: String
+  VPCCIDRPubSubNet2:
+    Type: String
+  VPCCIDRPrivateSubNet1:
+    Type: String
+  VPCCIDRPrivateSubNet2:
+    Type: String
+  ProjectName:
+    Description: An environment name for project 2
+    Type: String
+  VPCNAME:
+    Type: String
+  AUTOSCALEGROUPNAME:
+    Type: String
+  ProjectInstanceAMI:
+    Type: String
+  ProjectInstanceType:
+    Type: String
+  ExportProjectNamePrefix:
+    Type: String
+
+Resources:
+  Proj2VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      # To have all subnets be 10.2.N+1.0
+      # where even values for (N%2) == 0 are public subnets
+      # and odd values for (N%2) == 1 are private subnets
+      CidrBlock: !Ref VPCCIDR
+      EnableDnsHostnames: true
+      Tags:
+        #Using the actual "Name" specifically as the key - will give you the "Name" value in the console
+        - Key: Name
+          Value: !Ref VPCNAME
+  ProjectInternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName} - Internet Gateway
+  Proj2IGWAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref ProjectInternetGateway
+      VpcId: !Ref Proj2VPC
+  PublicSubNet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Proj2VPC
+      CidrBlock: !Ref VPCCIDRPubSubNet1
+      MapPublicIpOnLaunch: true
+      AvailabilityZone: !Select [ 0, !GetAZs ]       
+      Tags:
+      - Key: Name
+        Value: !Sub ${AWS::StackName}-PublicSubNet-1
+  PublicSubNet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Proj2VPC
+      CidrBlock: !Ref VPCCIDRPubSubNet2
+      MapPublicIpOnLaunch: true
+      AvailabilityZone: !Select [ 1, !GetAZs ]       
+      Tags:
+      - Key: Name
+        Value: !Sub ${AWS::StackName}-PublicSubNet-2
+  PrivateSubNet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Proj2VPC
+      CidrBlock: !Ref VPCCIDRPrivateSubNet1
+      MapPublicIpOnLaunch: false
+      AvailabilityZone: !Select [ 0, !GetAZs ]       
+      Tags:
+      - Key: Name
+        Value: !Sub ${AWS::StackName}-PrivateSubNet-1
+  PrivateSubNet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Proj2VPC
+      CidrBlock: !Ref VPCCIDRPrivateSubNet2
+      MapPublicIpOnLaunch: false
+      AvailabilityZone: !Select [ 1, !GetAZs ]       
+      Tags:
+      - Key: Name
+        Value: !Sub ${AWS::StackName}-PrivateSubNet-2
+  
+  #This is the request to get a Public IPs so it can be 
+  #attached to each of the corresponding NGW for the Public Subnets
+  NatGatewayEIPPub1:
+    Type: AWS::EC2::EIP
+    DependsOn: Proj2IGWAttachment
+    Properties: 
+        Domain: vpc
+        Tags:
+          - Key: Name
+            Value: !Sub ${ProjectName} - EIP 1
+  NatGatewayEIPPub2:
+    Type: AWS::EC2::EIP
+    DependsOn: Proj2IGWAttachment
+    Properties:
+        Domain: vpc
+        Tags:
+          - Key: Name
+            Value: !Sub ${ProjectName} - EIP 2
+  
+  ################################################
+  # These are the public NAT Gateways used for our instances within
+  # the private sub-nets to connect to so requests can be made to
+  # the outside/public internet.
+  # Essentially, the NAT can act as a public IP for our private instances.
+  ################################################
+  NATGWPubSub1: 
+    Type: AWS::EC2::NatGateway
+    Properties:
+        # This just pulls the IP Address created in the NatGateway calls above
+        # so we can have that IP associated with this NAT Gateway.
+        AllocationId: !GetAtt NatGatewayEIPPub1.AllocationId
+        SubnetId: !Ref PublicSubNet1
+        Tags:
+          - Key: Name
+            Value: !Sub ${ProjectName} - NAT 1
+  NATGWPubSub2: 
+    Type: AWS::EC2::NatGateway
+    Properties:
+        # This just pulls the IP Address created in the NatGateway calls above
+        # so we can have that IP associated with this NAT Gateway.
+        AllocationId: !GetAtt NatGatewayEIPPub2.AllocationId
+        SubnetId: !Ref PublicSubNet2
+        Tags:
+          - Key: Name
+            Value: !Sub ${ProjectName} - NAT 2
+
+  PublicRouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Proj2VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName} Public Route Table 1
+
+  PublicRouteRule1:
+    Type: AWS::EC2::Route
+    DependsOn: Proj2IGWAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable1
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref ProjectInternetGateway
+
+  PublicRoute1Association:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable1
+      SubnetId: !Ref PublicSubNet1
+
+  PublicRoute2Association:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable1
+      SubnetId: !Ref PublicSubNet2
+
+  ################################################
+  # The Private Subnet routing tables and associated routes, allows us to route network request for publicly 
+  # available resources through our NAT Gateways residing on our public subnets and contain publicly available EIPs
+  ################################################
+  PrivateRouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Proj2VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName} Private Routing Table 1
+  PrivateRoute1:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGWPubSub1
+  PrivateRoute1Association:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      SubnetId: !Ref PrivateSubNet1
+
+  PrivateRouteTable2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Proj2VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName} Private Routing Table 2
+  PrivateRoute2:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGWPubSub2
+  PrivateRoute2Association:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      SubnetId: !Ref PrivateSubNet2
+
+  ##################################################
+  # The sections below are to configure the EC2 Instances to:
+  #
+  # 1) Create role which allows EC2's to read from S3 Buckets
+  # 2) Create an EC2 profile to attached to instances that are launched within the CloudFormation Stack
+  #    that essentially attaches the Readonly S3 permissions to the instances.
+  # 3) Create the security group which allows http requests to reach and be processed by our servers
+  # 4) Create the launch configuration for our web servers
+  ##################################################
+  TheS3ReaderRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: This is the S3 Read-only role to allow EC2 instances to read from S3 buckets.
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action: 
+              - sts:AssumeRole
+      #Path: '/'
+      Tags:
+        - Key: Name
+          Value: S3 Readonly Role
+
+  TheEC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: Proj2InstancesProfile
+      Path: /
+      Roles:
+        - !Ref TheS3ReaderRole
+
+  WebAccessSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+        GroupDescription: Allow http to our hosts
+        Tags:
+          - Key: Name
+            Value: Proj2InstancesSG 
+        VpcId: !Ref Proj2VPC
+        SecurityGroupIngress:
+          #Remember to get rid of this rule
+          - IpProtocol: tcp
+            FromPort: 22
+            ToPort: 22
+            CidrIp: 69.138.170.109/32 
+          - IpProtocol: tcp
+            FromPort: 80
+            ToPort: 80
+            CidrIp: 0.0.0.0/0
+        SecurityGroupEgress:
+          - IpProtocol: -1
+            FromPort: -1
+            ToPort: -1
+            CidrIp: 0.0.0.0/0
+
+  LoadBalancerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow our loadbalancer to accept/deny specific IP traffic
+      Tags:
+        - Key: Name
+          Value: Proj2LoadBalancerSG
+      VpcId: !Ref Proj2VPC
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          FromPort: -1
+          ToPort: -1
+          CidrIp: 0.0.0.0/0
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+
+  #Target group for the autoscaled EC2 instances
+  Proj2InstancesTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties: 
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 6
+      HealthyThresholdCount: 5
+      Name: Proj2ELBTgtGrp
+      Port: 80
+      Protocol: HTTP
+      Tags: 
+        - Key: Name
+          Value: PROJ2TG
+      UnhealthyThresholdCount: 3
+      VpcId: !Ref Proj2VPC
+
+  #The primary launch configuration for the auto-scaled EC2 instances
+  Proj2LaunchConfig:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      ImageId: !Ref ProjectInstanceAMI
+      InstanceType: !Ref ProjectInstanceType
+      IamInstanceProfile: !Ref TheEC2InstanceProfile
+      #AvailabilityZone: us-east-1
+      #SubnetId: subnet-343a7a15
+      #REMEMBER TO REMOVE THE KEY!!!!!!!!!
+      KeyName: DummyTestKey
+      #Minimize charge and every 5 minutes is fine
+      InstanceMonitoring: false
+      SecurityGroups:
+        - Ref: "WebAccessSecurityGroup"
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/sh
+          sudo yum update -y
+          sudo yum install -y httpd
+          sudo systemctl start httpd
+          sudo systemctl enable httpd
+          sudo groupadd www
+          sudo usermod -a -G www ec2-user
+          sudo chgrp -R www /var/www
+          sudo chmod 2775 /var/www
+          find /var/www -type d -exec sudo chmod 2775 {} +
+          find /var/www -type f -exec sudo chmod 0664 {} +
+          cd /var/www/html
+          aws s3 cp s3://udacity-demo-1/udacity.zip .
+          unzip -o udacity.zip 
+      BlockDeviceMappings:
+        - DeviceName: "/dev/sdk"
+          #/dev/xvda
+          Ebs:
+            VolumeSize: '10'
+            DeleteOnTermination: true
+
+  Proj2PublicLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: Proj2PublicLoadBalancer
+      Scheme: internet-facing
+      SecurityGroups:
+        - !Ref LoadBalancerSecurityGroup
+      Subnets: 
+        - !Ref PublicSubNet1
+        - !Ref PublicSubNet2
+      Type: application
+
+  #This is the actual component which talks to our target-group
+  Proj2PublicELBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref Proj2InstancesTargetGroup
+      LoadBalancerArn: !Ref Proj2PublicLoadBalancer
+      Port: 80
+      Protocol: HTTP
+
+  PrivateInstancesAutoScaleGrp:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: !Ref AUTOSCALEGROUPNAME
+      LaunchConfigurationName:
+        Ref: Proj2LaunchConfig
+      #Must be specified for elastic load-balancing
+      HealthCheckGracePeriod: 10
+      MinSize: '2'
+      DesiredCapacity: '4'
+      MaxSize: '8'
+      CapacityRebalance: true
+      #Having the AvailabilityZones (set up same as the subnets using GetAZ) AND VPCZoneIdentifier set
+      #will ensure we do not get out of sync with subnets being used outside the AZs we designate
+      AvailabilityZones:
+        - !Select [0, !GetAZs ]
+        - !Select [1, !GetAZs ]
+      VPCZoneIdentifier:
+        - !Ref PrivateSubNet1
+        - !Ref PrivateSubNet2
+      TargetGroupARNs:
+        - Ref: Proj2InstancesTargetGroup
+
+Outputs:
+  ProjVPC:
+    Description: This is the Udaciyt Project2 VPC
+    Value: !Ref Proj2VPC
+    Export:
+      Name: UdacityProj2VPC
+  ProjIGW:
+    Description: This is the Udaciyt Project2 IGW
+    Value: !Ref ProjectInternetGateway
+    Export:
+      Name: UdacityProj2IGW
+  ProjIGWAttachment:
+    Description: This is the Udaciyt Project2 IGW Attachment
+    Value: !Ref Proj2IGWAttachment
+    Export:
+      Name: UdacityProj2IGWAttachment
+  ProjPubSubNet1:
+    Description: This is the Udaciyt Project2 Public SubNet 1
+    Value: !Ref PublicSubNet1
+    Export:
+      Name: UdacityProj2PublicSubNet1
+  ProjPubSubNet2:
+    Description: This is the Udaciyt Project2 Public SubNet 2
+    Value: !Ref PublicSubNet2
+    Export:
+      Name: UdacityProj2PublicSubNet2
+  ProjPrivSubNet1:
+    Description: This is the Udaciyt Project2 Private SubNet 1
+    Value: !Ref PrivateSubNet1
+    Export:
+      Name: UdacityProj2PrivateSubNet1
+  ProjPrivSubNet2:
+    Description: This is the Udaciyt Project2 Private SubNet 2
+    Value: !Ref PrivateSubNet2
+    Export:
+      Name: UdacityProj2PrivateSubNet2
