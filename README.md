@@ -1,5 +1,7 @@
 # UdacityProj2
-This is the cloudformation scripts used to complete the 2nd project
+This is the cloudformation scripts used to complete the 2nd project which can be found at:
+
+> http://proj2publicloadbalancer-1915985515.us-east-1.elb.amazonaws.com/
 
 The script to run the stack take the yaml source and jason parameters files
 
