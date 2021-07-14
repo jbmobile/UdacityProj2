@@ -269,9 +269,9 @@ Resources:
             ToPort: 80
             CidrIp: 0.0.0.0/0
         SecurityGroupEgress:
-          - IpProtocol: -1
-            FromPort: -1
-            ToPort: -1
+          - IpProtocol: tcp
+            FromPort: 0
+            ToPort: 65535
             CidrIp: 0.0.0.0/0
 
   LoadBalancerSecurityGroup:
@@ -283,9 +283,9 @@ Resources:
           Value: Proj2LoadBalancerSG
       VpcId: !Ref Proj2VPC
       SecurityGroupEgress:
-        - IpProtocol: -1
-          FromPort: -1
-          ToPort: -1
+        - IpProtocol: tcp
+          FromPort: 0
+          ToPort: 65535
           CidrIp: 0.0.0.0/0
       SecurityGroupIngress:
         - IpProtocol: tcp
@@ -316,10 +316,6 @@ Resources:
       ImageId: !Ref ProjectInstanceAMI
       InstanceType: !Ref ProjectInstanceType
       IamInstanceProfile: !Ref TheEC2InstanceProfile
-      #AvailabilityZone: us-east-1
-      #SubnetId: subnet-343a7a15
-      #REMEMBER TO REMOVE THE KEY!!!!!!!!!
-      KeyName: DummyTestKey
       #Minimize charge and every 5 minutes is fine
       InstanceMonitoring: false
       SecurityGroups:
